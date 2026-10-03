@@ -1,19 +1,16 @@
 # Karmadilo
 
-Flutter dashboard for Karmadilo.
+داشبورد بازارهای کارمادیلو با دریافت چندمنبعی قیمت‌های دلار، طلای ۱۸ عیار و بیت‌کوین.
 
-## Current stage
+## نسخه فعلی
 
-The dashboard now requests live market quotes when it opens:
-
-- USD / Iranian rial market price
-- 18-carat gold
-- Bitcoin (BTC/USD)
-
-Iranian market quotes are fetched from TGJU's market-data endpoint. Bitcoin uses CoinGecko's public market endpoint. The app converts Iranian-rial quotes to toman for display.
-
-The app also supports pull-to-refresh on the dashboard.
+- لوگوی جدید و انیمیشن شروع کوتاه
+- شروع دریافت قیمت‌ها همزمان با نمایش لوگو
+- چند منبع ایرانی برای کاهش وابستگی به یک سرویس
+- نوبیتکس و والکس برای بیت‌کوین
+- کش آخرین قیمت معتبر برای اینترنت ضعیف یا قطعی موقت
+- بروزرسانی دستی با کشیدن صفحه به پایین
 
 ## Build
 
-GitHub Actions generates the Android project and builds the release APK.
+GitHub Actions پروژه Android را تولید و APK نسخه release را می‌سازد.
