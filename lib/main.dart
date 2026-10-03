@@ -682,11 +682,11 @@ class DashboardPage extends StatelessWidget {
                 padding: const EdgeInsets.all(18),
                 child: Row(
                   children: [
-                    Icon(widget.quotes.any((q) => q.isLoading) ? Icons.sync : Icons.cloud_done_outlined),
+                    Icon(quotes.any((q) => q.isLoading) ? Icons.sync : Icons.cloud_done_outlined),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        widget.quotes.any((q) => q.isLoading)
+                        quotes.any((q) => q.isLoading)
                             ? 'قیمت‌ها در حال دریافت از چند منبع هستند...'
                             : 'برای دریافت آخرین قیمت‌ها، صفحه را به پایین بکشید.',
                       ),
