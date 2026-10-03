@@ -404,6 +404,7 @@ class MarketController extends ChangeNotifier {
 }
 
 class MarketSources {
+    static const _timeout = Duration(seconds: 6);
   static const _headers = {
     'Accept': 'application/json,text/html;q=0.9,*/*;q=0.8',
     'User-Agent': 'Mozilla/5.0 Karmadilo/0.3',
