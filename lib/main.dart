@@ -840,10 +840,19 @@ class _MarketsPageState extends State<MarketsPage> {
           const SizedBox(height: 16),
           SegmentedButton<bool>(segments: const [
             ButtonSegment(value: false, label: Text('خطی'), icon: Icon(Icons.show_chart)),
-            ButtonSegment(value: true, label: Text('شمعی'), icon: Icon(Icons.candlestick_chart)),
+            ButtonSegment(value: true, label: Text('شمعی'), icon: Icon(Icons.bar_chart)),
           ], selected: {candlestick}, onSelectionChanged: (v) => setState(() => candlestick = v.first)),
           const SizedBox(height: 12),
-          Wrap(spacing: 8, children: ['۱ روز', '۱ هفته', '۱ ماه', 'همه'].map((v) => ChoiceChip(label: Text(v), selected: period == v, onSelected: (_) => setState(() => period = v)).toList()),
+          Wrap(
+            spacing: 8,
+            children: ['۱ روز', '۱ هفته', '۱ ماه', 'همه']
+                .map((v) => ChoiceChip(
+                      label: Text(v),
+                      selected: period == v,
+                      onSelected: (_) => setState(() => period = v),
+                    ))
+                .toList(),
+          ),
           const SizedBox(height: 12),
           SizedBox(height: 230, width: double.infinity, child: points.length < 2
               ? Center(child: Text(points.isEmpty ? 'هنوز تاریخچه کافی نیست. قیمت‌ها را در زمان‌های مختلف به‌روزرسانی کنید.' : 'برای رسم نمودار، حداقل دو ثبت قیمت لازم است.', textAlign: TextAlign.center))
