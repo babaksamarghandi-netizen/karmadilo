@@ -195,6 +195,20 @@ class RawQuote {
   });
 }
 
+class PricePoint {
+  final int time;
+  final double price;
+  const PricePoint(this.time, this.price);
+  Map<String, dynamic> toJson() => {'time': time, 'price': price};
+  static PricePoint? fromJson(dynamic value) {
+    if (value is! Map) return null;
+    final t = value['time'];
+    final p = value['price'];
+    if (t is! num || p is! num || p <= 0) return null;
+    return PricePoint(t.toInt(), p.toDouble());
+  }
+}
+
 class MarketController extends ChangeNotifier {
   static const _timeout = Duration(seconds: 6);
   static const _cachePrefix = 'karmadilo.quote.';
@@ -221,6 +235,9 @@ class MarketController extends ChangeNotifier {
   };
 
   bool _loading = false;
+  final Map<String, List<PricePoint>> _history = {};
+
+  List<PricePoint> historyFor(String id) => List.unmodifiable(_history[id] ?? const <PricePoint>[]);
 
   List<MarketQuote> get quotes => _quotes.values.toList(growable: false);
   bool get loading => _loading;
@@ -353,8 +370,23 @@ class MarketController extends ChangeNotifier {
       source: result.source,
     );
     _quotes[id] = quote;
+    await _recordHistory(id, result.priceToman, now);
     await _saveQuote(quote);
     notifyListeners();
+  }
+
+  Future<void> _recordHistory(String id, double price, DateTime time) async {
+    final points = _history.putIfAbsent(id, () => <PricePoint>[]);
+    // Avoid storing duplicate points when a source returns the same price within a minute.
+    if (points.isNotEmpty && time.millisecondsSinceEpoch - points.last.time < 60000) {
+      points[points.length - 1] = PricePoint(time.millisecondsSinceEpoch, price);
+    } else {
+      points.add(PricePoint(time.millisecondsSinceEpoch, price));
+    }
+    // Keep up to 2,000 samples per market to limit local storage use.
+    if (points.length > 2000) points.removeRange(0, points.length - 2000);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('karmadilo.history.$id', jsonEncode(points.map((p) => p.toJson()).toList()));
   }
 
   Future<void> _saveQuote(MarketQuote quote) async {
@@ -370,6 +402,15 @@ class MarketController extends ChangeNotifier {
   Future<void> _restoreCache() async {
     final prefs = await SharedPreferences.getInstance();
     for (final id in _quotes.keys) {
+      final rawHistory = prefs.getString('karmadilo.history.$id');
+      if (rawHistory != null) {
+        try {
+          final decoded = jsonDecode(rawHistory);
+          if (decoded is List) {
+            _history[id] = decoded.map(PricePoint.fromJson).whereType<PricePoint>().toList();
+          }
+        } catch (_) {}
+      }
       final price = prefs.getDouble('${_cachePrefix}$id.price');
       final timestamp = prefs.getInt('${_cachePrefix}$id.updatedAt');
       if (price == null || timestamp == null || price <= 0) continue;
@@ -653,7 +694,7 @@ class _HomePageState extends State<HomePage> {
           quotes: widget.controller.quotes,
           onRefresh: widget.controller.refresh,
         ),
-        const MarketsPage(),
+        MarketsPage(quotes: widget.controller.quotes, historyFor: widget.controller.historyFor, onRefresh: widget.controller.refresh),
         const RecommendationsPage(),
         const ForecastPage(),
       ];
@@ -753,13 +794,114 @@ class MarketCard extends StatelessWidget {
   }
 }
 
-class MarketsPage extends StatelessWidget {
-  const MarketsPage({super.key});
+class MarketsPage extends StatefulWidget {
+  final List<MarketQuote> quotes;
+  final List<PricePoint> Function(String id) historyFor;
+  final Future<void> Function() onRefresh;
+  const MarketsPage({super.key, required this.quotes, required this.historyFor, required this.onRefresh});
 
   @override
-  Widget build(BuildContext context) => const Center(
-        child: Text('بازارها\nدلار • طلا • ارز • رمزارز • نفت • فلزات', textAlign: TextAlign.center, style: TextStyle(fontSize: 20)),
-      );
+  State<MarketsPage> createState() => _MarketsPageState();
+}
+
+class _MarketsPageState extends State<MarketsPage> {
+  String selectedId = 'dollar';
+  bool candlestick = false;
+  String period = 'همه';
+
+  @override
+  Widget build(BuildContext context) {
+    final quote = widget.quotes.firstWhere((q) => q.id == selectedId, orElse: () => widget.quotes.first);
+    final all = widget.historyFor(quote.id);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cutoff = period == '۱ روز' ? now - const Duration(days: 1).inMilliseconds
+        : period == '۱ هفته' ? now - const Duration(days: 7).inMilliseconds
+        : period == '۱ ماه' ? now - const Duration(days: 30).inMilliseconds : 0;
+    final points = all.where((p) => p.time >= cutoff).toList();
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh,
+      child: ListView(padding: const EdgeInsets.all(16), children: [
+        const Text('بازارها', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+        const Text('نمودارها از زمان شروع ذخیره قیمت، تاریخچه واقعی جمع می‌کنند.'),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: selectedId,
+          decoration: const InputDecoration(labelText: 'انتخاب بازار', border: OutlineInputBorder()),
+          items: widget.quotes.map((q) => DropdownMenuItem(value: q.id, child: Text(q.name))).toList(),
+          onChanged: (v) { if (v != null) setState(() => selectedId = v); },
+        ),
+        const SizedBox(height: 12),
+        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(quote.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text('${quote.value} تومان', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold)),
+          Text(quote.note, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 16),
+          SegmentedButton<bool>(segments: const [
+            ButtonSegment(value: false, label: Text('خطی'), icon: Icon(Icons.show_chart)),
+            ButtonSegment(value: true, label: Text('شمعی'), icon: Icon(Icons.candlestick_chart)),
+          ], selected: {candlestick}, onSelectionChanged: (v) => setState(() => candlestick = v.first)),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, children: ['۱ روز', '۱ هفته', '۱ ماه', 'همه'].map((v) => ChoiceChip(label: Text(v), selected: period == v, onSelected: (_) => setState(() => period = v)).toList()),
+          const SizedBox(height: 12),
+          SizedBox(height: 230, width: double.infinity, child: points.length < 2
+              ? Center(child: Text(points.isEmpty ? 'هنوز تاریخچه کافی نیست. قیمت‌ها را در زمان‌های مختلف به‌روزرسانی کنید.' : 'برای رسم نمودار، حداقل دو ثبت قیمت لازم است.', textAlign: TextAlign.center))
+              : CustomPaint(painter: MarketChartPainter(points: points, candlestick: candlestick, textColor: Theme.of(context).colorScheme.onSurface, gridColor: Theme.of(context).dividerColor))),
+          const SizedBox(height: 8),
+          Text('تعداد ثبت‌های واقعی: ${points.length}', style: Theme.of(context).textTheme.bodySmall),
+        ]))),
+        const SizedBox(height: 8),
+        const Text('برای ساخت تاریخچه، قیمت‌ها هنگام به‌روزرسانی ذخیره می‌شوند. تاریخچه گذشته‌ای که قبلاً ثبت نشده، قابل بازسازی نیست.'),
+      ]),
+    );
+  }
+}
+
+class MarketChartPainter extends CustomPainter {
+  final List<PricePoint> points;
+  final bool candlestick;
+  final Color textColor;
+  final Color gridColor;
+  MarketChartPainter({required this.points, required this.candlestick, required this.textColor, required this.gridColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const left = 8.0, right = 8.0, top = 12.0, bottom = 12.0;
+    final rect = Rect.fromLTWH(left, top, size.width-left-right, size.height-top-bottom);
+    final values = points.map((p) => p.price).toList();
+    var minV = values.reduce((a,b) => a < b ? a : b);
+    var maxV = values.reduce((a,b) => a > b ? a : b);
+    if (maxV == minV) { maxV *= 1.01; minV *= 0.99; }
+    final grid = Paint()..color = gridColor.withOpacity(.45)..strokeWidth = 1;
+    for (var i=0;i<4;i++) { final y=rect.top+rect.height*i/3; canvas.drawLine(Offset(rect.left,y),Offset(rect.right,y),grid); }
+    double yFor(double v) => rect.bottom - ((v-minV)/(maxV-minV))*rect.height;
+    if (!candlestick) {
+      final path = Path();
+      for (var i=0;i<points.length;i++) {
+        final x = rect.left + (points.length == 1 ? 0 : rect.width*i/(points.length-1));
+        final pt = Offset(x,yFor(points[i].price));
+        if (i==0) path.moveTo(pt.dx,pt.dy); else path.lineTo(pt.dx,pt.dy);
+      }
+      canvas.drawPath(path, Paint()..color=const Color(0xFF8B80FF)..strokeWidth=2.5..style=PaintingStyle.stroke..strokeCap=StrokeCap.round);
+    } else {
+      final step = rect.width / points.length;
+      final candleWidth = (step * .55).clamp(2.0, 12.0);
+      for (var i=0;i<points.length;i++) {
+        final p=points[i].price;
+        final prev=i==0 ? p : points[i-1].price;
+        final up=p>=prev;
+        final color=up ? const Color(0xFF35C98A) : const Color(0xFFFF647C);
+        final paint=Paint()..color=color..strokeWidth=1.3;
+        final x=rect.left+step*(i+.5);
+        canvas.drawLine(Offset(x,yFor(p)),Offset(x,yFor(prev)),paint);
+        final body=Rect.fromLTRB(x-candleWidth/2, yFor(p)<yFor(prev)?yFor(p):yFor(prev), x+candleWidth/2, (yFor(p)-yFor(prev)).abs()<2 ? (yFor(p)+yFor(prev))/2+1 : (yFor(p)>yFor(prev)?yFor(p):yFor(prev)));
+        canvas.drawRect(body,paint);
+      }
+    }
+  }
+  @override
+  bool shouldRepaint(covariant MarketChartPainter old) => old.points != points || old.candlestick != candlestick || old.textColor != textColor || old.gridColor != gridColor;
 }
 
 class RecommendationsPage extends StatelessWidget {
