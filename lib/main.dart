@@ -551,7 +551,19 @@ class _MarketsPageState extends State<MarketsPage> {
         Text(quote.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), const SizedBox(height: 4),
         Text('${quote.value} تومان', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold)), Text(quote.note, style: Theme.of(context).textTheme.bodySmall), const SizedBox(height: 16),
         SegmentedButton<bool>(segments: const [ButtonSegment(value: false, label: Text('خطی'), icon: Icon(Icons.show_chart)), ButtonSegment(value: true, label: Text('شمعی'), icon: Icon(Icons.bar_chart))], selected: {candlestick}, onSelectionChanged: (v) => setState(() => candlestick = v.first)),
-        const SizedBox(height: 12), Wrap(spacing: 8, children: ['۱ روز', '۱ هفته', '۱ ماه', 'همه'].map((v) => ChoiceChip(label: Text(v), selected: period == v, onSelected: (_) => setState(() => period = v)).toList()),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          children: ['۱ روز', '۱ هفته', '۱ ماه', 'همه']
+              .map(
+                (v) => ChoiceChip(
+                  label: Text(v),
+                  selected: period == v,
+                  onSelected: (_) => setState(() => period = v),
+                ),
+              )
+              .toList(),
+        ),
         const SizedBox(height: 12), SizedBox(height: 230, width: double.infinity, child: points.length < 2 ? Center(child: Text(points.isEmpty ? 'هنوز تاریخچه کافی نیست. قیمت‌ها را در زمان‌های مختلف به‌روزرسانی کنید.' : 'برای رسم نمودار، حداقل دو ثبت قیمت لازم است.', textAlign: TextAlign.center)) : CustomPaint(painter: MarketChartPainter(points: points, candlestick: candlestick, textColor: Theme.of(context).colorScheme.onSurface, gridColor: Theme.of(context).dividerColor))),
         const SizedBox(height: 8), Text('تعداد ثبت‌های واقعی: ${points.length}', style: Theme.of(context).textTheme.bodySmall),
       ]))), const SizedBox(height: 8), const Text('برای ساخت تاریخچه، قیمت‌ها هنگام به‌روزرسانی ذخیره می‌شوند. تاریخچه گذشته‌ای که قبلاً ثبت نشده، قابل بازسازی نیست.'),
